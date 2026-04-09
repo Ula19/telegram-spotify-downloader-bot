@@ -1,0 +1,8 @@
+aiogram==3.26.0
+SQLAlchemy==2.0.38
+asyncpg==0.30.0
+pydantic-settings==2.8.1
+aiofiles==24.1.0
+python-dotenv==1.0.1
+uvloop==0.22.1
+httpx==0.28.1

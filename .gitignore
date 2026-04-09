@@ -1,0 +1,12 @@
+.env
+*.md
+!README.md
+venv/
+__pycache__/
+*.pyc
+*.log
+/tmp/
+.crash_flag
+.DS_Store
+.idea/
+.vscode/

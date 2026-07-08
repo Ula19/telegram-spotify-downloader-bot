@@ -27,6 +27,8 @@ import logging
 from pathlib import Path
 from typing import Awaitable, Callable
 
+import httpx
+
 from bot.services.providers.base import (
     BaseProvider,
     DownloadResult,
@@ -34,6 +36,7 @@ from bot.services.providers.base import (
     SpotifyAPIDown,
     SpotifyError,
     SpotifyNotSupported,
+    SpotifyTimeout,
     TrackInfo,
     safe_unlink,
 )
@@ -67,6 +70,10 @@ OnMetadata = Callable[[TrackInfo], Awaitable[None]]
 
 def _build_providers() -> list[BaseProvider]:
     """Собирает цепочку провайдеров в порядке приоритета."""
+    # «24-7» конвертят синхронно — на незакэшированном треке ответ идёт >10с,
+    # поэтому даём им больше времени. Backend у всех троих общий (один владелец):
+    # group="24-7" → при таймауте одного оркестратор пропускает остальных.
+    t247 = httpx.Timeout(20.0, connect=6.0)
     return [
         # Семейство «24-7» (один владелец, но у каждого свой лимит 25/день) —
         # ставим первыми, чтобы жечь их дешёвую квоту раньше остальных.
@@ -78,6 +85,8 @@ def _build_providers() -> list[BaseProvider]:
             link_param="url",
             parser=parse_status_url,
             needs_oembed=True,
+            timeout=t247,
+            group="24-7",
         ),
         RapidAPIProvider(
             name="24-7-premium",
@@ -87,6 +96,8 @@ def _build_providers() -> list[BaseProvider]:
             link_param="url",
             parser=parse_status_url,
             needs_oembed=True,
+            timeout=t247,
+            group="24-7",
         ),
         RapidAPIProvider(
             name="24-7-tracks-albums",
@@ -96,6 +107,8 @@ def _build_providers() -> list[BaseProvider]:
             link_param="url",
             parser=parse_status_url,
             needs_oembed=True,
+            timeout=t247,
+            group="24-7",
         ),
         RapidAPIProvider(
             name="spotify-downloader-v2",
@@ -173,8 +186,16 @@ class SpotifyDownloader:
 
         errors: list[tuple[str, str]] = []
         metadata_shown = False
+        dead_groups: set[str] = set()  # backend группы завис — остальных из неё пропускаем
 
         for provider in self.providers:
+            group = getattr(provider, "group", None)
+            if group and group in dead_groups:
+                logger.info(
+                    "Провайдер '%s' пропущен: backend группы '%s' уже завис",
+                    provider.name, group,
+                )
+                continue
             try:
                 track = await provider.get_track(url, track_id, canonical_url)
 
@@ -197,6 +218,9 @@ class SpotifyDownloader:
                     "Провайдер '%s' не смог (%s): %s",
                     provider.name, type(e).__name__, e,
                 )
+                # таймаут провайдера с общим backend → остальных из группы не мучаем
+                if isinstance(e, SpotifyTimeout) and group:
+                    dead_groups.add(group)
                 continue
             except Exception as e:  # неожиданное — тоже пробуем следующего
                 errors.append((provider.name, str(e)))

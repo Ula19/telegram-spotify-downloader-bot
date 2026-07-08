@@ -18,6 +18,7 @@ from .base import (
     DownloadResult,
     SpotifyAPIDown,
     SpotifyError,
+    SpotifyTimeout,
     TrackInfo,
     stream_to_file,
 )
@@ -221,6 +222,8 @@ class RapidAPIProvider(BaseProvider):
         form_field: str | None = None,   # поле x-www-form-urlencoded для POST
         json_field: str | None = None,   # поле json-тела для POST
         needs_oembed: bool = False,      # добрать title/обложку через oEmbed
+        timeout: httpx.Timeout | None = None,  # свой таймаут (медленным-синхронным нужен больше)
+        group: str | None = None,        # общий backend: при таймауте одного пропускаем всю группу
     ) -> None:
         self.name = name
         self.host = host
@@ -231,6 +234,8 @@ class RapidAPIProvider(BaseProvider):
         self.form_field = form_field
         self.json_field = json_field
         self.needs_oembed = needs_oembed
+        self.timeout = timeout or API_TIMEOUT
+        self.group = group
         self._client: httpx.AsyncClient | None = None
 
     @property
@@ -242,7 +247,7 @@ class RapidAPIProvider(BaseProvider):
             if not settings.rapidapi_key:
                 raise SpotifyError("RAPIDAPI_KEY не задан в .env")
             self._client = httpx.AsyncClient(
-                timeout=API_TIMEOUT,
+                timeout=self.timeout,
                 follow_redirects=True,
                 proxy=settings.proxy_url or None,  # поддержка SOCKS5/HTTP прокси
                 headers={
@@ -280,7 +285,7 @@ class RapidAPIProvider(BaseProvider):
             else:
                 resp = await client.post(self._base_url, json={self.json_field: spotify_url})
         except httpx.TimeoutException as e:
-            raise SpotifyAPIDown(f"{self.name}: таймаут") from e
+            raise SpotifyTimeout(f"{self.name}: таймаут") from e
         except httpx.HTTPError as e:
             raise SpotifyAPIDown(f"{self.name}: сеть {e}") from e
 

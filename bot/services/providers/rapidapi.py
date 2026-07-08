@@ -224,6 +224,7 @@ class RapidAPIProvider(BaseProvider):
         needs_oembed: bool = False,      # добрать title/обложку через oEmbed
         timeout: httpx.Timeout | None = None,  # свой таймаут (медленным-синхронным нужен больше)
         group: str | None = None,        # общий backend: при таймауте одного пропускаем всю группу
+        audio_ext: str = ".mp3",         # расширение отдаваемого файла (.mp3 / .m4a)
     ) -> None:
         self.name = name
         self.host = host
@@ -236,6 +237,7 @@ class RapidAPIProvider(BaseProvider):
         self.needs_oembed = needs_oembed
         self.timeout = timeout or API_TIMEOUT
         self.group = group
+        self.audio_ext = audio_ext
         self._client: httpx.AsyncClient | None = None
 
     @property
@@ -311,8 +313,10 @@ class RapidAPIProvider(BaseProvider):
 
     async def download_track(self, track: TrackInfo) -> DownloadResult:
         if not track.download_url:
-            raise SpotifyError(f"{self.name}: нет прямой ссылки на mp3")
-        dst = await stream_to_file(self._get_client(), track.download_url)
+            raise SpotifyError(f"{self.name}: нет прямой ссылки на аудио")
+        dst = await stream_to_file(
+            self._get_client(), track.download_url, suffix=self.audio_ext
+        )
         return DownloadResult(
             file_path=str(dst),
             title=track.title,

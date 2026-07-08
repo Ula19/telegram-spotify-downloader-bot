@@ -11,9 +11,9 @@ SpotifyAllProvidersFailed и один раз дёргаем алерт адми�
 
 Провайдеры (см. bot/services/providers/). Порядок выстроен по данным из прода:
 семейство «24-7» (по 25/день) сверху, вечно-таймаутящий downloader9 — вниз.
-    1. 24-7-mp3-fast                    GET  /download_track_mp3?url=  — {status,url}, oEmbed
-    2. 24-7-premium                     GET  /download_track_mp3?url=  — {status,url}, oEmbed
-    3. 24-7-tracks-albums               GET  /download_track_mp3?url=  — {status,url}, oEmbed
+    1. 24-7-mp3-fast                    GET  /download_track_m4a?url=  — {status,url}, m4a, oEmbed
+    2. 24-7-premium                     GET  /download_track_m4a?url=  — {status,url}, m4a, oEmbed
+    3. 24-7-tracks-albums               GET  /download_track_m4a?url=  — {status,url}, m4a, oEmbed
     4. spotify-downloader-v2            POST /v1/convert   (json url)  — 320kbps, без метадаты
     5. spotify-music-mp3-downloader-api GET  /download?link=          — богатая метадата
     6. spotify-downloader-mp33          POST /spotify.php  (form url=)
@@ -80,7 +80,8 @@ def _build_providers() -> list[BaseProvider]:
         RapidAPIProvider(
             name="24-7-mp3-fast",
             host="mp3-spotify-downloader-api-fast-24-7-api.p.rapidapi.com",
-            path="/download_track_mp3",
+            path="/download_track_m4a",  # mp3-ссылка отдаёт 404, живой только m4a
+            audio_ext=".m4a",
             method="GET",
             link_param="url",
             parser=parse_status_url,
@@ -91,7 +92,8 @@ def _build_providers() -> list[BaseProvider]:
         RapidAPIProvider(
             name="24-7-premium",
             host="spotify-downloader-mp3-m4a-flac-premium-api-stable-24-7.p.rapidapi.com",
-            path="/download_track_mp3",
+            path="/download_track_m4a",  # mp3-ссылка отдаёт 404, живой только m4a
+            audio_ext=".m4a",
             method="GET",
             link_param="url",
             parser=parse_status_url,
@@ -102,7 +104,8 @@ def _build_providers() -> list[BaseProvider]:
         RapidAPIProvider(
             name="24-7-tracks-albums",
             host="24-7-spotify-mp3-downloader-api-tracks-playlists-albums.p.rapidapi.com",
-            path="/download_track_mp3",
+            path="/download_track_m4a",  # mp3-ссылка отдаёт 404, живой только m4a
+            audio_ext=".m4a",
             method="GET",
             link_param="url",
             parser=parse_status_url,

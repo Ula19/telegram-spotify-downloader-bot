@@ -116,9 +116,13 @@ async def stream_to_file(
     *,
     headers: dict[str, str] | None = None,
     timeout: httpx.Timeout = DOWNLOAD_TIMEOUT,
+    suffix: str = ".mp3",
 ) -> Path:
-    """Стримит mp3 по прямой ссылке в уникальный файл. Используют все RapidAPI-провайдеры."""
-    dst = TMP_DIR / f"{uuid.uuid4().hex}.mp3"
+    """Стримит аудио по прямой ссылке в уникальный файл. Используют все RapidAPI-провайдеры.
+
+    suffix — расширение файла (.mp3 / .m4a): Telegram определяет формат по нему.
+    """
+    dst = TMP_DIR / f"{uuid.uuid4().hex}{suffix}"
     try:
         async with client.stream("GET", url, headers=headers, timeout=timeout) as response:
             if response.status_code >= 400:

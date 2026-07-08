@@ -72,7 +72,6 @@ def _build_providers() -> list[BaseProvider]:
             json_field="url",
             parser=parse_v2,
             needs_oembed=True,
-            poll_on_202=True,  # v2 — очередь задач: на 202 переспрашиваем
         ),
         RapidAPIProvider(
             name="spotify-music-mp3-downloader-api",

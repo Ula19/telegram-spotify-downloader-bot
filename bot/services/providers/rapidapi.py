@@ -6,7 +6,6 @@
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any, Callable
 
@@ -193,9 +192,6 @@ class RapidAPIProvider(BaseProvider):
         form_field: str | None = None,   # поле x-www-form-urlencoded для POST
         json_field: str | None = None,   # поле json-тела для POST
         needs_oembed: bool = False,      # добрать title/обложку через oEmbed
-        poll_on_202: bool = False,       # 202 = задача в очереди, переспросить
-        poll_attempts: int = 2,          # сколько раз переспросить на 202
-        poll_delay: float = 2.0,         # пауза между опросами, сек
     ) -> None:
         self.name = name
         self.host = host
@@ -206,9 +202,6 @@ class RapidAPIProvider(BaseProvider):
         self.form_field = form_field
         self.json_field = json_field
         self.needs_oembed = needs_oembed
-        self.poll_on_202 = poll_on_202
-        self.poll_attempts = poll_attempts
-        self.poll_delay = poll_delay
         self._client: httpx.AsyncClient | None = None
 
     @property
@@ -248,26 +241,19 @@ class RapidAPIProvider(BaseProvider):
             track.cover_url = meta.get("thumbnail_url")
 
     async def _call(self, spotify_url: str) -> dict:
-        """Делает запрос к RapidAPI и возвращает распарсенный JSON.
-
-        Для очередей задач (poll_on_202): 202 значит «задача поставлена, ещё
-        не готова» — переспрашиваем тем же запросом до poll_attempts раз. Если
-        так и не готово — отдаём 202 дальше, парсер увидит отсутствие ссылки и
-        цепочка уйдёт к следующему провайдеру.
-        """
+        """Делает запрос к RapidAPI и возвращает распарсенный JSON."""
         client = self._get_client()
-
-        resp = await self._send(client, spotify_url)
-        if self.poll_on_202:
-            for attempt in range(1, self.poll_attempts + 1):
-                if resp.status_code != 202:
-                    break
-                logger.info(
-                    "%s: задача в очереди (202), опрос %d/%d через %.0fс",
-                    self.name, attempt, self.poll_attempts, self.poll_delay,
-                )
-                await asyncio.sleep(self.poll_delay)
-                resp = await self._send(client, spotify_url)
+        try:
+            if self.method == "GET":
+                resp = await client.get(self._base_url, params={self.link_param: spotify_url})
+            elif self.form_field:
+                resp = await client.post(self._base_url, data={self.form_field: spotify_url})
+            else:
+                resp = await client.post(self._base_url, json={self.json_field: spotify_url})
+        except httpx.TimeoutException as e:
+            raise SpotifyAPIDown(f"{self.name}: таймаут") from e
+        except httpx.HTTPError as e:
+            raise SpotifyAPIDown(f"{self.name}: сеть {e}") from e
 
         self._check_status(resp)
 
@@ -275,20 +261,6 @@ class RapidAPIProvider(BaseProvider):
             return resp.json()
         except Exception as e:
             raise SpotifyError(f"{self.name}: не-JSON ответ ({e})") from e
-
-    async def _send(self, client: httpx.AsyncClient, spotify_url: str) -> httpx.Response:
-        """Один запрос к эндпоинту (метод/способ передачи ссылки — из конфига)."""
-        try:
-            if self.method == "GET":
-                return await client.get(self._base_url, params={self.link_param: spotify_url})
-            elif self.form_field:
-                return await client.post(self._base_url, data={self.form_field: spotify_url})
-            else:
-                return await client.post(self._base_url, json={self.json_field: spotify_url})
-        except httpx.TimeoutException as e:
-            raise SpotifyAPIDown(f"{self.name}: таймаут") from e
-        except httpx.HTTPError as e:
-            raise SpotifyAPIDown(f"{self.name}: сеть {e}") from e
 
     def _check_status(self, resp: httpx.Response) -> None:
         code = resp.status_code

@@ -87,6 +87,15 @@ async def main() -> None:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Таблицы БД созданы")
 
+        # статус прокси (логин/пароль прячем)
+        if settings.proxy_url:
+            from urllib.parse import urlsplit
+            p = urlsplit(settings.proxy_url)
+            safe = f"{p.scheme}://{p.hostname}:{p.port}" if p.hostname else "задан"
+            logger.info("Прокси включён для всех движков: %s", safe)
+        else:
+            logger.info("Прокси не задан — движки ходят напрямую")
+
         # crash recovery
         if os.path.exists(CRASH_FLAG):
             logger.warning("Обнаружен crash-flag — предыдущий запуск завершился аварийно")

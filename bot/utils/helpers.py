@@ -4,28 +4,32 @@ from typing import Literal
 
 SpotifyKind = Literal["track", "album", "playlist"]
 
+# Spotify-айди — ровно 22 символа base62. Меньше/больше = мусор
+# (ловим кривые ссылки вроде /track/BillieEilish, чтобы не гонять их по цепочке).
+_ID = r"[a-zA-Z0-9]{22}(?![a-zA-Z0-9])"
+
 # open.spotify.com/[intl-xx/]track|album|playlist/<id>[?si=...]
 _SPOTIFY_URL_RE = re.compile(
     r"https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?"
-    r"(track|album|playlist)/([a-zA-Z0-9]+)"
+    r"(track|album|playlist)/(" + _ID + r")"
 )
 
 # только треки (основной поддерживаемый тип)
 _SPOTIFY_TRACK_RE = re.compile(
     r"https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?"
-    r"track/([a-zA-Z0-9]+)"
+    r"track/(" + _ID + r")"
 )
 
 # альбомы/плейлисты — на MVP не поддерживаем, но отличаем от невалидного текста
 _SPOTIFY_COLLECTION_RE = re.compile(
     r"https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?"
-    r"(album|playlist)/([a-zA-Z0-9]+)"
+    r"(album|playlist)/(" + _ID + r")"
 )
 
 # подкасты/эпизоды — для явного отлова и сообщения "не поддерживается"
 _SPOTIFY_UNSUPPORTED_RE = re.compile(
     r"https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?"
-    r"(episode|show)/([a-zA-Z0-9]+)"
+    r"(episode|show)/(" + _ID + r")"
 )
 
 

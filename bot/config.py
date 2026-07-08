@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     spotify_client_id: str = ""
     spotify_client_secret: str = ""
 
+    # путь к cookie-файлу YouTube (опционально) — обход "Sign in to confirm you're not a bot"
+    # в spotdl, когда качаем с помеченного IP/прокси. Формат Netscape (экспорт из браузера).
+    spotdl_cookie_file: str = ""
+
     # кэш скачиваний (дни)
     cache_ttl_days: int = 1
 

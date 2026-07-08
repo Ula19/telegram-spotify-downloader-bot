@@ -52,16 +52,24 @@ class SpotdlProvider(BaseProvider):
         return self._client
 
     async def get_track(self, url: str, track_id: str, canonical_url: str) -> TrackInfo:
-        # spotdl не отдаёт метадату дёшево — берём название/обложку из oEmbed
-        meta = await fetch_oembed(self._get_client(), canonical_url)
+        # spotdl не отдаёт метадату дёшево — берём название/обложку из oEmbed.
+        # Если oEmbed недоступен — не страшно, качаем с title="Unknown".
+        title, cover = "Unknown", None
+        try:
+            meta = await fetch_oembed(self._get_client(), canonical_url)
+            title = meta.get("title") or "Unknown"
+            cover = meta.get("thumbnail_url")
+        except Exception:
+            logger.debug("spotdl: не удалось добрать метадату oEmbed", exc_info=True)
+
         return TrackInfo(
             url=canonical_url,
             track_id=track_id,
-            title=meta.get("title") or "Unknown",
+            title=title,
             artists=[],
             album="",
             duration=0,
-            cover_url=meta.get("thumbnail_url"),
+            cover_url=cover,
             download_url=None,
             provider=self.name,
         )
@@ -78,12 +86,25 @@ class SpotdlProvider(BaseProvider):
             "spotdl", "download", track.url,
             "--output", out_template,
             "--format", "mp3",
-            # источники по приоритету; bandcamp не берём — он даёт кривые матчи
-            "--audio", "youtube-music", "youtube",
         ]
-        # если YouTube режется в сети хостинга — пускаем spotdl через прокси
-        if settings.proxy_url:
-            cmd += ["--proxy", settings.proxy_url]
+
+        # Прокси. Тонкость: штатный --proxy у spotdl принимает ТОЛЬКО http(s),
+        # на socks5 он падает ("Invalid proxy server"). Поэтому socks отдаём
+        # напрямую yt-dlp через --yt-dlp-args (он socks умеет). А поиск через
+        # yt-dlp есть только у провайдера youtube — его и выбираем для socks.
+        proxy = (settings.proxy_url or "").strip()
+        if proxy.startswith(("http://", "https://")):
+            cmd += ["--audio", "youtube-music", "youtube", "--proxy", proxy]
+        elif proxy.startswith(("socks5://", "socks5h://", "socks4://", "socks://")):
+            cmd += ["--audio", "youtube", "--yt-dlp-args", f"--proxy {proxy}"]
+        else:
+            # без прокси; bandcamp не берём — он даёт кривые матчи
+            cmd += ["--audio", "youtube-music", "youtube"]
+
+        # cookie-файл (опц.) — обход "Sign in to confirm you're not a bot"
+        if settings.spotdl_cookie_file:
+            cmd += ["--cookie-file", settings.spotdl_cookie_file]
+
         # если заданы ключи Spotify API — spotdl мэтчит точнее
         if settings.spotify_client_id and settings.spotify_client_secret:
             cmd += [

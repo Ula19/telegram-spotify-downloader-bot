@@ -143,99 +143,54 @@ async def process_spotify_url(
     """
     canonical_url = clean_spotify_url(url)
 
-    progress = await message.answer(
-        t("download.fetching_info", lang),
-        parse_mode="HTML",
-    )
-
-    # ───── Метаданные трека ─────
-    try:
-        track = await downloader.get_track(canonical_url)
-    except SpotifyNotSupported:
-        await progress.edit_text(
-            t("download.only_tracks_supported", lang),
-            parse_mode="HTML",
-        )
-        return
-    except SpotifyAPIDown:
-        await progress.edit_text(
-            t("error.spotify_api_down", lang),
-            parse_mode="HTML",
-        )
-        return
-    except SpotifyError as e:
-        await progress.edit_text(
-            t("error.generic", lang, msg=str(e)[:300]),
-            parse_mode="HTML",
-        )
-        return
-    except Exception as e:
-        logger.exception("get_track упал: %s", canonical_url)
-        await progress.edit_text(
-            t("error.generic", lang, msg=str(e)[:300]),
-            parse_mode="HTML",
-        )
-        return
-
-    # Показываем метаданные
-    try:
-        await progress.edit_text(
-            t("download.track_info", lang,
-              title=track.title,
-              artist=track.artist_line or "—",
-              album=track.album or "—",
-              duration=format_duration(track.duration)),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
-
-    # ───── Кэш ─────
+    # ───── Кэш проверяем ДО провайдеров ─────
+    # так закэшированный трек уедет юзеру мгновенно и даже когда все движки лежат
     async with async_session() as session:
-        cached = await get_cached_download(session, track.url, FORMAT_KEY)
+        cached = await get_cached_download(session, canonical_url, FORMAT_KEY)
 
     if cached:
         try:
             await message.answer_audio(
                 cached.file_id,
-                title=track.title,
-                performer=track.artist_line or None,
+                title=cached.title or None,
             )
             async with async_session() as session:
                 await increment_download_count(session, user.id)
-            try:
-                await progress.delete()
-            except Exception:
-                pass
             return
         except Exception as e:
-            logger.warning("Кэш битый, перекачиваем: %s", e)
+            logger.warning("Кэш битый, качаем заново: %s", e)
 
-    # ───── Скачивание + отправка ─────
-    await _download_and_send(message, progress, track, user, lang)
+    progress = await message.answer(
+        t("download.fetching_info", lang),
+        parse_mode="HTML",
+    )
 
-
-async def _download_and_send(
-    message: Message,
-    progress: Message,
-    track: TrackInfo,
-    user: TgUser,
-    lang: str,
-) -> None:
-    """Качает mp3 через сервис и отправляет в Telegram."""
-    result: DownloadResult | None = None
-    try:
+    # показываем метадату, как только её отдал первый рабочий провайдер
+    async def _on_metadata(track: TrackInfo) -> None:
         try:
             await progress.edit_text(
-                t("download.downloading_track", lang),
+                t("download.track_info", lang,
+                  title=track.title,
+                  artist=track.artist_line or "—",
+                  album=track.album or "—",
+                  duration=format_duration(track.duration)),
                 parse_mode="HTML",
             )
         except Exception:
             pass
 
+    result: DownloadResult | None = None
+    try:
+        # ───── Добыча трека через цепочку провайдеров ─────
         try:
-            result = await downloader.download_track(track)
-        except SpotifyAPIDown:
+            track, result = await downloader.fetch(canonical_url, on_metadata=_on_metadata)
+        except SpotifyNotSupported:
+            await progress.edit_text(
+                t("download.only_tracks_supported", lang),
+                parse_mode="HTML",
+            )
+            return
+        except SpotifyAPIDown:  # сюда же попадает SpotifyAllProvidersFailed
             await progress.edit_text(
                 t("error.spotify_api_down", lang),
                 parse_mode="HTML",
@@ -251,7 +206,7 @@ async def _download_and_send(
             )
             return
         except Exception as e:
-            logger.exception("Неожиданная ошибка download_track")
+            logger.exception("fetch упал: %s", canonical_url)
             await progress.edit_text(
                 t("error.generic", lang, msg=str(e)[:300]),
                 parse_mode="HTML",
@@ -259,6 +214,7 @@ async def _download_and_send(
             )
             return
 
+        # ───── Отправка аудио в Telegram ─────
         try:
             await progress.edit_text(
                 t("download.uploading", lang),

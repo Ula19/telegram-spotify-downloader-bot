@@ -75,7 +75,12 @@ class SpotdlProvider(BaseProvider):
             "spotdl", "download", track.url,
             "--output", out_template,
             "--format", "mp3",
+            # источники по приоритету; bandcamp не берём — он даёт кривые матчи
+            "--audio", "youtube-music", "youtube",
         ]
+        # если YouTube режется в сети хостинга — пускаем spotdl через прокси
+        if settings.proxy_url:
+            cmd += ["--proxy", settings.proxy_url]
         # если заданы ключи Spotify API — spotdl мэтчит точнее
         if settings.spotify_client_id and settings.spotify_client_secret:
             cmd += [
@@ -102,10 +107,13 @@ class SpotdlProvider(BaseProvider):
             tail = (stdout or b"").decode(errors="ignore")[-300:]
             raise SpotifyAPIDown(f"spotdl: код {proc.returncode} ({tail})")
 
-        # ищем созданный файл по нашему префиксу
+        # ищем созданный файл по нашему префиксу.
+        # ВАЖНО: spotdl выходит с кодом 0 даже когда ничего не скачал
+        # (например, YouTube заблочен) — поэтому проверяем наличие файла.
         files = sorted(TMP_DIR.glob(f"{prefix}-*.mp3"))
         if not files:
-            raise SpotifyError("spotdl не создал mp3-файл")
+            tail = (stdout or b"").decode(errors="ignore").strip()[-200:]
+            raise SpotifyAPIDown(f"spotdl не скачал трек ({tail})")
         # если вдруг создалось несколько — лишние удаляем, берём первый
         for extra in files[1:]:
             safe_unlink(extra)

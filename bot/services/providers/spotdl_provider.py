@@ -45,7 +45,10 @@ class SpotdlProvider(BaseProvider):
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.AsyncClient(follow_redirects=True)
+            self._client = httpx.AsyncClient(
+                follow_redirects=True,
+                proxy=settings.proxy_url or None,  # oEmbed тоже через прокси, если задан
+            )
         return self._client
 
     async def get_track(self, url: str, track_id: str, canonical_url: str) -> TrackInfo:

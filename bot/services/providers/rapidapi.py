@@ -214,6 +214,7 @@ class RapidAPIProvider(BaseProvider):
             self._client = httpx.AsyncClient(
                 timeout=API_TIMEOUT,
                 follow_redirects=True,
+                proxy=settings.proxy_url or None,  # поддержка SOCKS5/HTTP прокси
                 headers={
                     "X-RapidAPI-Key": settings.rapidapi_key,
                     "X-RapidAPI-Host": self.host,

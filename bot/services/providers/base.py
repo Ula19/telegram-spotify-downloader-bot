@@ -66,11 +66,6 @@ class SpotifyAPIDown(SpotifyError):
     """Провайдер недоступен (5xx / timeout / 429 / ошибка CDN) — можно пробовать следующий."""
 
 
-class SpotifyTimeout(SpotifyAPIDown):
-    """Провайдер не ответил за таймаут. Сигнал, что его backend завис —
-    для провайдеров с общим backend (group) остальных из группы пропускаем."""
-
-
 class SpotifyAllProvidersFailed(SpotifyAPIDown):
     """Легли вообще все провайдеры в цепочке."""
 

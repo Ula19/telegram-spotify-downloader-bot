@@ -18,7 +18,6 @@ from .base import (
     DownloadResult,
     SpotifyAPIDown,
     SpotifyError,
-    SpotifyTimeout,
     TrackInfo,
     stream_to_file,
 )
@@ -156,35 +155,6 @@ def _parse_medias_root(payload: dict, root: dict, track_id: str, canonical_url: 
     )
 
 
-def parse_status_url(payload: dict, track_id: str, canonical_url: str) -> TrackInfo:
-    """Формат семейства «24-7»: {status:'done', url:'<файл>', ...} — метадаты нет.
-
-    Ссылку берём из url. Если статус говорит «ещё готовится» (processing/pending)
-    и ссылки нет — считаем сбоем, цепочка идёт дальше (опрос не делаем).
-    """
-    if not isinstance(payload, dict):
-        raise SpotifyError("пустой ответ")
-    if payload.get("error"):
-        raise SpotifyError(str(payload.get("error") or payload.get("message") or "ошибка API"))
-    status = str(payload.get("status") or "").lower()
-    download_url = payload.get("url") or payload.get("download_url") or payload.get("link")
-    ready = {"done", "ok", "success", "finished", "completed", "ready"}
-    if not download_url:
-        if status and status not in ready:
-            raise SpotifyAPIDown(f"трек ещё не готов (status={status})")
-        raise SpotifyError("нет url в ответе")
-    return TrackInfo(
-        url=canonical_url,
-        track_id=track_id,
-        title="",  # метадату добирает RapidAPIProvider через oEmbed (needs_oembed=True)
-        artists=[],
-        album="",
-        duration=0,
-        cover_url=None,
-        download_url=download_url,
-    )
-
-
 def parse_v2(payload: dict, track_id: str, canonical_url: str) -> TrackInfo:
     """spotify-downloader-v2: {spotify_id, download_url, ...} — метадаты нет."""
     if not isinstance(payload, dict):
@@ -222,8 +192,7 @@ class RapidAPIProvider(BaseProvider):
         form_field: str | None = None,   # поле x-www-form-urlencoded для POST
         json_field: str | None = None,   # поле json-тела для POST
         needs_oembed: bool = False,      # добрать title/обложку через oEmbed
-        timeout: httpx.Timeout | None = None,  # свой таймаут (медленным-синхронным нужен больше)
-        group: str | None = None,        # общий backend: при таймауте одного пропускаем всю группу
+        timeout: httpx.Timeout | None = None,  # свой таймаут (по умолчанию API_TIMEOUT)
         audio_ext: str = ".mp3",         # расширение отдаваемого файла (.mp3 / .m4a)
     ) -> None:
         self.name = name
@@ -236,7 +205,6 @@ class RapidAPIProvider(BaseProvider):
         self.json_field = json_field
         self.needs_oembed = needs_oembed
         self.timeout = timeout or API_TIMEOUT
-        self.group = group
         self.audio_ext = audio_ext
         self._client: httpx.AsyncClient | None = None
 
@@ -287,7 +255,7 @@ class RapidAPIProvider(BaseProvider):
             else:
                 resp = await client.post(self._base_url, json={self.json_field: spotify_url})
         except httpx.TimeoutException as e:
-            raise SpotifyTimeout(f"{self.name}: таймаут") from e
+            raise SpotifyAPIDown(f"{self.name}: таймаут") from e
         except httpx.HTTPError as e:
             raise SpotifyAPIDown(f"{self.name}: сеть {e}") from e
 

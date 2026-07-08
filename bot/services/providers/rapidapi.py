@@ -25,8 +25,9 @@ from .metadata import fetch_oembed
 
 logger = logging.getLogger(__name__)
 
-# Короткий таймаут на API-запрос — фейл-фаст, чтобы цепочка быстро шла дальше
-API_TIMEOUT = httpx.Timeout(15.0, connect=8.0)
+# Короткий таймаут на API-запрос — фейл-фаст, чтобы цепочка быстро шла дальше.
+# 10с достаточно живому движку; мёртвый (downloader9 вечно таймаутит) проскочим быстрее.
+API_TIMEOUT = httpx.Timeout(10.0, connect=6.0)
 
 # Тип парсера: (json-ответ, track_id, каноничный_url) -> TrackInfo
 Parser = Callable[[dict, str, str], TrackInfo]

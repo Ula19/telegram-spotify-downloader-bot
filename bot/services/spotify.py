@@ -9,12 +9,13 @@
 "это не трек" (SpotifyNotSupported) фоллбек НЕ делаем. Если легли все — кидаем
 SpotifyAllProvidersFailed и один раз дёргаем алерт админам.
 
-Провайдеры (см. bot/services/providers/):
-    1. spotify-downloader9              GET  /downloadSong?songId=
-    2. spotify-downloader-mp33          POST /spotify.php  (form url=)
-    3. spotify-downloader23             POST /spotify.php  (form url=)
-    4. spotify-downloader-v2            POST /v1/convert   (json url)  — 320kbps, без метадаты
-    5. spotify-music-mp3-downloader-api GET  /download?link=          — исходный движок
+Провайдеры (см. bot/services/providers/). Порядок выстроен по данным из прода:
+живые и быстрые сверху, вечно-таймаутящий downloader9 — вниз, перед spotdl.
+    1. spotify-downloader-v2            POST /v1/convert   (json url)  — 320kbps, без метадаты
+    2. spotify-music-mp3-downloader-api GET  /download?link=          — богатая метадата
+    3. spotify-downloader-mp33          POST /spotify.php  (form url=)
+    4. spotify-downloader23             POST /spotify.php  (form url=)
+    5. spotify-downloader9              GET  /downloadSong?songId=     — часто таймаутит
     6. spotdl                           self-hosted (YouTube)          — последний рубеж
 """
 from __future__ import annotations
@@ -64,12 +65,21 @@ def _build_providers() -> list[BaseProvider]:
     """Собирает цепочку провайдеров в порядке приоритета."""
     return [
         RapidAPIProvider(
-            name="spotify-downloader9",
-            host="spotify-downloader9.p.rapidapi.com",
-            path="/downloadSong",
+            name="spotify-downloader-v2",
+            host="spotify-downloader-v2.p.rapidapi.com",
+            path="/v1/convert",
+            method="POST",
+            json_field="url",
+            parser=parse_v2,
+            needs_oembed=True,
+        ),
+        RapidAPIProvider(
+            name="spotify-music-mp3-downloader-api",
+            host="spotify-music-mp3-downloader-api.p.rapidapi.com",
+            path="/download",
             method="GET",
-            link_param="songId",
-            parser=parse_downloader9,
+            link_param="link",
+            parser=parse_medias_wrapped,
         ),
         RapidAPIProvider(
             name="spotify-downloader-mp33",
@@ -88,21 +98,12 @@ def _build_providers() -> list[BaseProvider]:
             parser=parse_medias,
         ),
         RapidAPIProvider(
-            name="spotify-downloader-v2",
-            host="spotify-downloader-v2.p.rapidapi.com",
-            path="/v1/convert",
-            method="POST",
-            json_field="url",
-            parser=parse_v2,
-            needs_oembed=True,
-        ),
-        RapidAPIProvider(
-            name="spotify-music-mp3-downloader-api",
-            host="spotify-music-mp3-downloader-api.p.rapidapi.com",
-            path="/download",
+            name="spotify-downloader9",
+            host="spotify-downloader9.p.rapidapi.com",
+            path="/downloadSong",
             method="GET",
-            link_param="link",
-            parser=parse_medias_wrapped,
+            link_param="songId",
+            parser=parse_downloader9,
         ),
         SpotdlProvider(),
     ]

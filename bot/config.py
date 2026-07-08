@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # прокси (опционально, если RapidAPI заблокирован в стране хостинга)
     proxy_url: str = ""
 
+    # отдельный прокси только для spotdl (WARP) — чтобы YouTube-трафик шёл через него,
+    # а RapidAPI оставался прямым. Если пусто — spotdl берёт proxy_url.
+    spotdl_proxy_url: str = ""
+
     # ключи Spotify API (опционально) — нужны только spotdl-фоллбеку для точного мэтчинга
     # без них spotdl тоже работает, но на урезанном SpotipyFree
     spotify_client_id: str = ""

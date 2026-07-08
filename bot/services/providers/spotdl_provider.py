@@ -43,11 +43,16 @@ class SpotdlProvider(BaseProvider):
     def __init__(self) -> None:
         self._client: httpx.AsyncClient | None = None
 
+    @staticmethod
+    def _proxy() -> str:
+        """Прокси для spotdl: отдельный spotdl_proxy_url, иначе общий proxy_url."""
+        return (settings.spotdl_proxy_url or settings.proxy_url or "").strip()
+
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 follow_redirects=True,
-                proxy=settings.proxy_url or None,  # oEmbed тоже через прокси, если задан
+                proxy=self._proxy() or None,  # oEmbed тоже через прокси spotdl
             )
         return self._client
 
@@ -92,7 +97,7 @@ class SpotdlProvider(BaseProvider):
         # на socks5 он падает ("Invalid proxy server"). Поэтому socks отдаём
         # напрямую yt-dlp через --yt-dlp-args (он socks умеет). А поиск через
         # yt-dlp есть только у провайдера youtube — его и выбираем для socks.
-        proxy = (settings.proxy_url or "").strip()
+        proxy = self._proxy()
         if proxy.startswith(("http://", "https://")):
             cmd += ["--audio", "youtube-music", "youtube", "--proxy", proxy]
         elif proxy.startswith(("socks5://", "socks5h://", "socks4://", "socks://")):

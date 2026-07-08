@@ -88,13 +88,21 @@ async def main() -> None:
         logger.info("Таблицы БД созданы")
 
         # статус прокси (логин/пароль прячем)
-        if settings.proxy_url:
-            from urllib.parse import urlsplit
-            p = urlsplit(settings.proxy_url)
-            safe = f"{p.scheme}://{p.hostname}:{p.port}" if p.hostname else "задан"
-            logger.info("Прокси включён для всех движков: %s", safe)
-        else:
-            logger.info("Прокси не задан — движки ходят напрямую")
+        from urllib.parse import urlsplit
+
+        def _safe_proxy(url: str) -> str:
+            p = urlsplit(url)
+            return f"{p.scheme}://{p.hostname}:{p.port}" if p.hostname else "задан"
+
+        logger.info(
+            "Прокси RapidAPI: %s",
+            _safe_proxy(settings.proxy_url) if settings.proxy_url else "нет (напрямую)",
+        )
+        spotdl_proxy = settings.spotdl_proxy_url or settings.proxy_url
+        logger.info(
+            "Прокси spotdl: %s",
+            _safe_proxy(spotdl_proxy) if spotdl_proxy else "нет (напрямую)",
+        )
 
         # crash recovery
         if os.path.exists(CRASH_FLAG):

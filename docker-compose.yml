@@ -6,11 +6,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # service_started, не healthy: не блокируем старт бота ожиданием WARP.
+      # spotdl — редкий последний рубеж, к моменту вызова WARP уже поднимется.
+      warp:
+        condition: service_started
     volumes:
       - /tmp/spotify_bot:/tmp/spotify_bot
     restart: unless-stopped
     labels:
       autoheal: "true"
+
+  # Cloudflare WARP — socks5-прокси (порт 9091) только для spotdl-фоллбека:
+  # свой exit-IP от Cloudflare, чтобы обойти блокировку YouTube.
+  # При бане IP healthcheck упадёт → autoheal перезапустит контейнер (новый IP).
+  warp:
+    image: ghcr.io/mon-ius/docker-warp-socks:v5
+    container_name: spotify_bot_warp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -x socks5://127.0.0.1:9091 -s --max-time 5 https://www.cloudflare.com/cdn-cgi/trace | grep -q warp=on"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   postgres:
     image: postgres:16-alpine

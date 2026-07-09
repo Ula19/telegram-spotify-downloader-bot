@@ -34,6 +34,7 @@ from bot.services.spotify import (
     SpotifyAPIDown,
     SpotifyError,
     SpotifyNotSupported,
+    SpotifyTrackUnavailable,
     TrackInfo,
     downloader,
 )
@@ -188,6 +189,13 @@ async def process_spotify_url(
             await progress.edit_text(
                 t("download.only_tracks_supported", lang),
                 parse_mode="HTML",
+            )
+            return
+        except SpotifyTrackUnavailable:  # трека нет ни в одном источнике (не сбой)
+            await progress.edit_text(
+                t("error.track_unavailable", lang),
+                parse_mode="HTML",
+                reply_markup=get_back_keyboard(lang),
             )
             return
         except SpotifyAPIDown:  # сюда же попадает SpotifyAllProvidersFailed

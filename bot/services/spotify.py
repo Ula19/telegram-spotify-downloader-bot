@@ -31,6 +31,7 @@ from bot.services.providers.base import (
     SpotifyAPIDown,
     SpotifyError,
     SpotifyNotSupported,
+    SpotifyTrackUnavailable,
     TrackInfo,
     safe_unlink,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "SpotifyError",
     "SpotifyNotSupported",
     "SpotifyAPIDown",
+    "SpotifyTrackUnavailable",
     "SpotifyAllProvidersFailed",
     "SpotifyDownloader",
     "downloader",
@@ -107,6 +109,33 @@ def _build_providers() -> list[BaseProvider]:
         ),
         SpotdlProvider(),
     ]
+
+
+# маркеры «источник дошёл, но трека там нет» (а не сетевой/квотный сбой)
+_UNAVAILABLE_MARKERS = (
+    "не скачал",       # spotdl не скачал трек (...)
+    "no results",      # LookupError: No results found for song
+    "not available",   # [youtube] ...: This video is not available
+    "unavailable",
+    "not found",
+    "lookuperror",
+)
+
+
+def _looks_track_unavailable(errors: list[tuple[str, str]]) -> bool:
+    """True, если трека нет ни в одном источнике (а не сервис лёг).
+
+    Ориентир — spotdl, наш бесплатный catch-all в конце цепочки: если ОН не
+    нашёл трек (не таймаут, а «нет результатов / видео недоступно») — трека
+    просто нет. Таймаут/сеть spotdl'а — это уже сбой, тогда алертим как обычно.
+    """
+    for name, msg in errors:
+        if name == "spotdl":
+            low = msg.lower()
+            if "таймаут" in low or "не установлен" in low:
+                return False  # это сбой/конфиг, а не «нет трека»
+            return any(m in low for m in _UNAVAILABLE_MARKERS)
+    return False
 
 
 class SpotifyDownloader:
@@ -172,6 +201,14 @@ class SpotifyDownloader:
 
         # сюда дошли — значит легли все
         summary = "; ".join(f"{n}: {m}" for n, m in errors)
+
+        # Различаем «трека нет нигде» и «сервис лёг». Если spotdl (бесплатный
+        # catch-all) не НАШЁЛ трек — это свойство трека, а не сбой: админов не
+        # дёргаем, юзеру покажем «трек недоступен».
+        if _looks_track_unavailable(errors):
+            logger.info("Трек недоступен ни у одного источника: %s", summary)
+            raise SpotifyTrackUnavailable(summary)
+
         self._report_source_failure("all", f"легли все провайдеры → {summary}"[:500])
         raise SpotifyAllProvidersFailed(errors)
 

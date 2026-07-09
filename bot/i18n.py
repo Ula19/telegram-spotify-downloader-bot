@@ -385,6 +385,20 @@ TRANSLATIONS = {
             "Try again in a couple of minutes."
         ),
     },
+    "error.track_unavailable": {
+        "ru": (
+            f"{E['cross']} Не удалось найти этот трек ни в одном источнике. "
+            "Скорее всего, его нет в доступных каталогах — попробуй другой трек."
+        ),
+        "uz": (
+            f"{E['cross']} Bu trek hech qaysi manbadan topilmadi. "
+            "Ehtimol, u mavjud kataloglarda yo'q — boshqa trekni sinab ko'ring."
+        ),
+        "en": (
+            f"{E['cross']} Couldn't find this track in any source. "
+            "It's likely not in the available catalogs — try another track."
+        ),
+    },
 
     # ═══════════════════════ ADMIN ═══════════════════════
     "admin.title": {

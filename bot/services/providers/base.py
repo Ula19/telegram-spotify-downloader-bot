@@ -66,6 +66,14 @@ class SpotifyAPIDown(SpotifyError):
     """Провайдер недоступен (5xx / timeout / 429 / ошибка CDN) — можно пробовать следующий."""
 
 
+class SpotifyTrackUnavailable(SpotifyError):
+    """Трека нет ни в одном источнике (spotdl не нашёл его на YouTube и т.п.).
+
+    Это НЕ сбой сервиса, а свойство трека — админов не алертим, юзеру говорим
+    «трек недоступен». Намеренно НЕ наследник SpotifyAPIDown, чтобы хендлер
+    отличал этот случай от реального падения сервиса."""
+
+
 class SpotifyAllProvidersFailed(SpotifyAPIDown):
     """Легли вообще все провайдеры в цепочке."""
 
